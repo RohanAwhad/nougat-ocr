@@ -1,0 +1,6 @@
+pdf2image
+pillow
+transformers>=4.38
+torch
+tqdm
+numpy
