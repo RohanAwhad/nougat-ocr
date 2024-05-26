@@ -22,8 +22,13 @@ def get_model(ckpt):
   )
   print('Model loaded')
 
-  encoder.load_state_dict(torch.load(os.path.join(ckpt, 'encoder.bin')))
-  decoder.load_state_dict(torch.load(os.path.join(ckpt, 'decoder.bin')))
+  if os.path.exists(os.path.join(ckpt, 'encoder.bin')) and os.path.exists(os.path.join(ckpt, 'decoder.bin')):
+    encoder.load_state_dict(torch.load(os.path.join(ckpt, 'encoder.bin')))
+    decoder.load_state_dict(torch.load(os.path.join(ckpt, 'decoder.bin')))
+  else:
+    from hf_hub import hf_hub_download
+    encoder.load_state_dict(torch.load(hf_hub_download(ckpt, 'encoder.bin')))
+    decoder.load_state_dict(torch.load(hf_hub_download(ckpt, 'decoder.bin')))
   print('Weights loaded')
 
   encoder.eval()
