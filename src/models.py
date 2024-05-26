@@ -545,6 +545,8 @@ class MBartDecoder(nn.Module):
     vs_cache: torch.Tensor,  # (n_layers, bz, seq_len, embed_dim)
     kc_cache: torch.Tensor,  # (n_layers, bz, seq_len, encoder_embed_dim)
     vc_cache: torch.Tensor,  # (n_layers, bz, seq_len, encoder_embed_dim)
+    s_cache_pos: int,
+    c_cache_pos: int,
   ) -> torch.Tensor:
     bz, seq_len = input_ids.shape
     word_embd = self.word_embeddings(input_ids) * self.embed_scale
@@ -553,34 +555,45 @@ class MBartDecoder(nn.Module):
     cache_len = ks_cache.shape[2]
     pos_embd = self.position_embeddings(self.position_ids[:, cache_len:cache_len+seq_len])
     hidden_states = self.ln_begin(word_embd + pos_embd)
+    '''
     new_ks_cache = []
     new_vs_cache = []
     new_kc_cache = []
     new_vc_cache = []
+    '''
     for i, layer in enumerate(self.layers):
       output = layer(
         hidden_states,
         kv_states,
         self_attention_mask,
         cross_attention_mask,
-        ks_cache[i],
-        vs_cache[i],
-        kc_cache[i],
-        vc_cache[i],
+        ks_cache[i, :, :s_cache_pos],
+        vs_cache[i, :, :s_cache_pos],
+        kc_cache[i, :, :c_cache_pos],
+        vc_cache[i, :, :c_cache_pos],
       )
       hidden_states = output[0]
+      '''
       new_ks_cache.append(output[1])
       new_vs_cache.append(output[2])
       new_kc_cache.append(output[3])
       new_vc_cache.append(output[4])
+      '''
+      ks_cache[i, :, :s_cache_pos+1] = output[1]
+      vs_cache[i, :, :s_cache_pos+1] = output[2]
+      kc_cache[i] = output[3]
+      vc_cache[i] = output[4]
 
     out = self.ln_end(hidden_states)
 
+    '''
     new_ks_cache = torch.stack(new_ks_cache)
     new_vs_cache = torch.stack(new_vs_cache)
     new_kc_cache = torch.stack(new_kc_cache)
     new_vc_cache = torch.stack(new_vc_cache)
     return out, new_ks_cache, new_vs_cache, new_kc_cache, new_vc_cache
+    '''
+    return out, ks_cache, vs_cache, kc_cache, vc_cache, s_cache_pos+1, kc_cache.shape[2]
 
 
 class MBartLMHead(nn.Module):
@@ -616,8 +629,10 @@ class NougatDecoder(nn.Module):
     vs_cache: torch.Tensor,  # (n_layers, bz, seq_len, embed_dim)
     kc_cache: torch.Tensor,  # (n_layers, bz, seq_len, encoder_embed_dim)
     vc_cache: torch.Tensor,  # (n_layers, bz, seq_len, encoder_embed_dim)
+    s_cache_pos: int,
+    c_cache_pos
   ) -> torch.Tensor:
-    hidden_states, ks_cache, vs_cache, kc_cache, vc_cache = self.decoder(
+    hidden_states, ks_cache, vs_cache, kc_cache, vc_cache, s_cache_pos, c_cache_pos = self.decoder(
       input_ids,
       self_attention_mask,
       kv_states,
@@ -626,6 +641,8 @@ class NougatDecoder(nn.Module):
       vs_cache,
       kc_cache,
       vc_cache,
+      s_cache_pos,
+      c_cache_pos,
     )
     logits = self.lm_head(hidden_states)
-    return logits, (ks_cache, vs_cache, kc_cache, vc_cache)
+    return logits, (ks_cache, vs_cache, kc_cache, vc_cache, s_cache_pos, c_cache_pos)

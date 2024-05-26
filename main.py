@@ -28,7 +28,7 @@ decoder.eval()
 
 # set device
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-#device = torch.device('mps') if torch.backends.mps.is_available() else device
+device = torch.device('mps') if torch.backends.mps.is_available() else device
 
 encoder.to(device)
 decoder.to(device)
@@ -38,19 +38,21 @@ def generate(images, max_len=None):
   pixel_values = processor(images, return_tensors='pt').pixel_values.to(device)
   encoder_hidden_state = encoder(pixel_values)
 
-  bz = encoder_hidden_state.shape[0]
+  bz, enc_seq_len, embed_dim = encoder_hidden_state.shape
+  n_layers = config.decoder.decoder_layers
+
   input_ids = [[0] for _ in range(bz)]
   output_ids = [[0] for _ in range(bz)]
+  if max_len is None: max_len = config.decoder.max_position_embeddings
 
-  n_layers = config.decoder.decoder_layers
-  embed_dim = config.decoder.d_model
+  ks_cache = torch.zeros(n_layers, bz, max_len, embed_dim).to(device)
+  vs_cache = torch.zeros(n_layers, bz, max_len, embed_dim).to(device)
+  kc_cache = torch.zeros(n_layers, bz, enc_seq_len, embed_dim).to(device)
+  vc_cache = torch.zeros(n_layers, bz, enc_seq_len, embed_dim).to(device)
+  s_cache_pos = 0
+  c_cache_pos = 0
 
-  ks_cache = torch.empty(n_layers, bz, 0, embed_dim).to(device)
-  vs_cache = torch.empty(n_layers, bz, 0, embed_dim).to(device)
-  kc_cache = torch.empty(n_layers, bz, 0, embed_dim).to(device)
-  vc_cache = torch.empty(n_layers, bz, 0, embed_dim).to(device)
-
-  cache = (ks_cache, vs_cache, kc_cache, vc_cache)
+  cache = (ks_cache, vs_cache, kc_cache, vc_cache, s_cache_pos, c_cache_pos)
 
   inp = torch.tensor(input_ids).to(device)
   break_flag = False
@@ -92,7 +94,7 @@ if __name__ == '__main__':
   images = [np.array(image) for image in images]
   images = [Image.fromarray(image).convert("RGB") for image in images]
   start = time.monotonic()
-  output_ids = generate(images, max_len=300)
+  output_ids = generate(images, max_len=100)
   end = time.monotonic()
   with open('make_a_scene.txt', 'w') as f:
     for x in output_ids:
