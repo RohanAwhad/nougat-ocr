@@ -109,7 +109,10 @@ def generate(images, max_len=None):
     pbar.update(1)
 
   pbar.close()
-  return output_ids
+
+  # decode output_ids
+  out = [processor.decode(x, skip_special_tokens=True) for x in output_ids]
+  return ' '.join(out)
 
 
 config, processor, encoder, decoder, device = None, None, None, None, None
@@ -133,11 +136,9 @@ if __name__ == '__main__':
   images = [np.array(image) for image in images]
   images = [Image.fromarray(image).convert("RGB") for image in images]
   start = time.monotonic()
-  output_ids = generate(images, max_len=None)
+  text = generate(images, max_len=None)
   end = time.monotonic()
-  with open(args.output, 'w') as f:
-    for x in output_ids:
-      f.write(processor.decode(x, skip_special_tokens=True) + ' ')
+  with open(args.output, 'w') as f: f.write(text)
   print()
   print('='*80)
   print(f'Time taken: {end-start:.2f} seconds')
